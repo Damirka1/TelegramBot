@@ -1,109 +1,141 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Telegram.Bot;
-using Telegram.Bot.Exceptions;
-using Telegram.Bot.Polling;
-using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types;
+using SKitLs.Bots.Telegram.AdvancedMessages.AdvancedDelivery;
+using SKitLs.Bots.Telegram.AdvancedMessages.Model.Messages;
+using SKitLs.Bots.Telegram.AdvancedMessages.Model.Messages.Text;
+using SKitLs.Bots.Telegram.ArgedInteractions.Argumentation;
+using SKitLs.Bots.Telegram.Core.Model.Building;
+using SKitLs.Bots.Telegram.Core.Model.Interactions.Defaults;
+using SKitLs.Bots.Telegram.Core.Model.Management.Defaults;
+using SKitLs.Bots.Telegram.Core.Model.UpdateHandlers.Defaults;
+using SKitLs.Bots.Telegram.Core.Model.UpdatesCasting.Signed;
+using SKitLs.Bots.Telegram.PageNavs.Model;
+using SKitLs.Bots.Telegram.PageNavs.Prototype;
+using SKitLs.Bots.Telegram.Stateful.Model;
+using SKitLs.Bots.Telegram.Stateful.Prototype;
+using SKitLs.Utils.Localizations.Prototype;
+using TelegramBot.Users;
+
 
 namespace TelegramBot
 {
     internal class Program
     {
-        private static TelegramBotClient botClient;
         private static OracleContext context;
 
-        public static async Task PrepareBotMenu()
-        {
-            List<BotCommand> commands = new List<BotCommand>();
-
-            var kzt = new BotCommand();
-            kzt.Command = "/kzt";
-            kzt.Description = "Вывод курса RUB - KZT";
-
-            commands.Add(kzt);
-
-            await botClient.SetMyCommandsAsync(commands, new BotCommandScopeDefault());
-        }
-
-        public static Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
             // Set up configuration
             IConfiguration configuration = new ConfigurationBuilder()
            .AddJsonFile("appsettings.json")
            .Build();
 
-            botClient = new TelegramBotClient(configuration["TelegramBotToken"]);
-
             // Set up entity framework connection to postgresql
-            context = new OracleContext(configuration["ConnectionSetting:DefaultConnection"]);
+            //context = new OracleContext(configuration["ConnectionSetting:DefaultConnection"]);
 
-            context.Database.EnsureCreated();
+            //context.Database.EnsureCreated();
 
-            Console.WriteLine("Count = " + context.Ameis.Count());
+			Console.WriteLine("Start Listening");
 
-            // Next set up TelegramBot framework
-
-            using var cts = new CancellationTokenSource();
-
-            var receiverOptions = new ReceiverOptions
-            {
-                AllowedUpdates = Array.Empty<UpdateType>() // receive all update types
-            };
-
-            botClient.StartReceiving(
-                HandleUpdateAsync,
-                HandlePollingErrorAsync,
-                receiverOptions,
-                cts.Token);
-
-            PrepareBotMenu();
-
-            Console.WriteLine($"Start listening");
-            Console.ReadLine();
-
-            // Send cancellation request to stop bot
-            cts.Cancel();
-            return Task.CompletedTask;
+			// Next set up TelegramBot framework
+			await PrepareBot(configuration["TelegramBotToken"]);
         }
 
-        private static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+        public static async Task PrepareBot(string token)
         {
-            // Only process Message updates: https://core.telegram.org/bots/api#message
+			BotBuilder.DebugSettings.DebugLanguage = LangKey.RU;
+			BotBuilder.DebugSettings.UpdateLocalsPath("resources/locals");
 
-            var message = update.Message;
-            if (update.Message == null)
-                return;
+			var privateMessages = new DefaultSignedMessageUpdateHandler();
+			var privateTexts = new DefaultSignedMessageTextUpdateHandler
+			{
+				CommandsManager = new DefaultActionManager<SignedMessageTextUpdate>()
+			};
+			privateTexts.CommandsManager.AddSafely(StartCommand);
+			privateMessages.TextMessageUpdateHandler = privateTexts;
 
-            //if (update.Message is not { } message)
-            //    return;
-            //// Only process text messages
-            //if (message.Text is not { "" } messageText)
-            //    return;
+			var mm = GetMenuManager();
+			var privateCallbacks = new DefaultCallbackHandler()
+			{
+				CallbackManager = new DefaultActionManager<SignedCallbackUpdate>(),
+			};
 
-            if (message.Text == "/kzt")
-            {
-                double kzt = 0;
+			privateCallbacks.CallbackManager.AddSafely(StartSearching);
 
-                string text = "Привет! Сегодняшний курс на пару RUB KZT 1 к " + string.Format("{0:0.00}", kzt);
+			mm.ApplyTo(privateCallbacks.CallbackManager);
 
-                await botClient.SendTextMessageAsync(message.Chat.Id, text);
-            }
+			ChatDesigner privates = ChatDesigner.NewDesigner()
+			.UseUsersManager(new UserManager())
+			.UseMessageHandler(privateMessages)
+			.UseCallbackHandler(privateCallbacks);
 
-            Console.WriteLine($"Received a '{message.Text}' message in chat {message.Chat.Id}.");
-        }
+			await BotBuilder.NewBuilder(token)
+			   .EnablePrivates(privates)
+				.AddService<IArgsSerializeService>(new DefaultArgsSerializeService())
+				.AddService(mm)
+				.CustomDelivery(new AdvancedDeliverySystem())
+				.Build()
+				.Listen();
+		}
 
-        private static Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
-        {
-            var ErrorMessage = exception switch
-            {
-                ApiRequestException apiRequestException
-                    => $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
-                _ => exception.ToString()
-            };
+		private static DefaultCommand StartCommand => new("start", Do_StartAsync);
+		private static async Task Do_StartAsync(SignedMessageTextUpdate update)
+		{
+			var mm = update.Owner.ResolveService<IMenuManager>();
 
-            Console.WriteLine(ErrorMessage);
-            return Task.CompletedTask;
-        }
-    }
+			// Получаем определённую страницу по id
+			// ...StaticPage( { это id -> } "main", "Главная"...
+			var page = mm.GetDefined("main");
+
+			await mm.PushPageAsync(page, update);
+		}
+
+		private static IMenuManager GetMenuManager()
+		{
+			var mm = new DefaultMenuManager();
+
+			var mainBody = new OutputMessageText("Добро пожаловать!\n\nЧего желаете?");
+			var mainMenu = new PageNavMenu();
+			var mainPage = new WidgetPage("main", "Главная", mainBody, mainMenu);
+
+			var listBody = new OutputMessageText("Здесь будут отображаться заявки...");
+
+			var listPage = new WidgetPage("saved", "Проверить заявки", listBody);
+
+			var createBody = new OutputMessageText("Здесь будут отображаться данные пользователя");
+
+			var createPage = new WidgetPage("other", "Мои Данные", createBody);
+
+			mainMenu.PathTo(listPage);
+			mainMenu.PathTo(createPage);
+			mainMenu.AddAction(StartSearching);
+
+			mm.Define(mainPage);
+			mm.Define(listPage);
+			mm.Define(createPage);
+
+			return mm;
+		}
+
+		// Этот коллбэк будет вызывать поиск. Пока что прототип.
+		private static DefaultCallback StartSearching => new("startCreation", "Создать заявку", Do_SearchAsync);
+		private static async Task Do_SearchAsync(SignedCallbackUpdate update) 
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+				int st = sender.State.StateId;
+
+				if(st == 0)
+				{
+					await update.Owner.DeliveryService.AnswerSenderAsync("Введите ФИО", update);
+					sender.State = new DefaultUserState(st + 1);
+				}
+				else
+				{
+					await update.Owner.DeliveryService.AnswerSenderAsync("Вы ещё не ввели ФИО сотрудника", update);
+				}
+			}
+
+		}
+	}
 }

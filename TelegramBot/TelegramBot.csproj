@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -15,7 +15,11 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
     <PackageReference Include="Oracle.EntityFrameworkCore" Version="7.21.11" />
-    <PackageReference Include="Telegram.Bot" Version="19.0.0" />
+    <PackageReference Include="SKitLs.Bots.Telegram.AdvancedMessages" Version="2.2.0" />
+    <PackageReference Include="SKitLs.Bots.Telegram.ArgedInteractions" Version="1.4.1" />
+    <PackageReference Include="SKitLs.Bots.Telegram.Core" Version="2.3.1" />
+    <PackageReference Include="SKitLs.Bots.Telegram.PageNavs" Version="1.6.0" />
+    <PackageReference Include="SKitLs.Bots.Telegram.Stateful" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,7 +27,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /Y &quot;$(ProjectDir)appsettings.json&quot; &quot;$(TargetDir)&quot;" />
+    <Exec Command="xcopy /Y &quot;$(ProjectDir)appsettings.json&quot; &quot;$(TargetDir)&quot;&#xD;&#xA;xcopy /s /e /i /Y &quot;$(ProjectDir)resources&quot; &quot;$(TargetDir)resources&quot;" />
   </Target>
 
 </Project>
