@@ -11,8 +11,7 @@ namespace TelegramBot
     internal class Program
     {
         private static TelegramBotClient botClient;
-        private static MyContext context;
-        private static ConvertService convertService = new ConvertService();
+        private static OracleContext context;
 
         public static async Task PrepareBotMenu()
         {
@@ -37,9 +36,11 @@ namespace TelegramBot
             botClient = new TelegramBotClient(configuration["TelegramBotToken"]);
 
             // Set up entity framework connection to postgresql
-            context = new MyContext(configuration["ConnectionSetting:DefaultConnection"]);
+            context = new OracleContext(configuration["ConnectionSetting:DefaultConnection"]);
 
             context.Database.EnsureCreated();
+
+            Console.WriteLine("Count = " + context.Ameis.Count());
 
             // Next set up TelegramBot framework
 
@@ -82,7 +83,7 @@ namespace TelegramBot
 
             if (message.Text == "/kzt")
             {
-                double kzt = await convertService.GetRubToKzt();
+                double kzt = 0;
 
                 string text = "Привет! Сегодняшний курс на пару RUB KZT 1 к " + string.Format("{0:0.00}", kzt);
 
