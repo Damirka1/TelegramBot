@@ -229,13 +229,19 @@ namespace TelegramBot
 				if (botUser.UserPages.Page * PageCount + PageCount < botUser.UserPages.Users.Count)
 					menu.Add("Следующая страница", NextPage);
 
-				var resMsg = $"Результат поиска (страница - {botUser.UserPages.Page + 1}, записей - {PageCount}):\n\n";
+				int count = botUser.UserPages.Page * PageCount + PageCount;
 
-				for (int i = botUser.UserPages.Page * PageCount; i < botUser.UserPages.Page * PageCount + PageCount; i++)
+				if (botUser.UserPages.Page * PageCount + PageCount > botUser.UserPages.Users.Count)
+					count = botUser.UserPages.Users.Count;
+
+				var resMsg = $"Результат поиска (страница - {botUser.UserPages.Page + 1}, записей - {count}):\n\n";
+
+
+				for (int i = botUser.UserPages.Page * PageCount; i < count; i++)
 				{
 					var user = botUser.UserPages.Users[i];
 
-					resMsg += $"Пользователь: {user.Nachn + " " + user.Vorna + " " + user.Midnm}\n" +
+					resMsg += $"{i + 1}) Пользователь: {user.Nachn + " " + user.Vorna + " " + user.Midnm}\n" +
 						   $"Должность - {user.Position}\n\n";
 					menu.Add($"{user.Nachn + " " + user.Vorna + " " + user.Midnm}", SelectUser, new IntWrapper(user.Usrid));
 				}
@@ -282,19 +288,29 @@ namespace TelegramBot
 		{
 			BotUser sender = (BotUser) update.Sender;
 
+			if(sender.UserPages.Users is null)
+			{
+				return;
+			}
+
 			var menu = new PairedInlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
 
-			if(sender.UserPages.Page * PageCount + PageCount < sender.UserPages.Users.Count)
+			int count = sender.UserPages.Page * PageCount + PageCount;
+
+			if (sender.UserPages.Page * PageCount + PageCount > sender.UserPages.Users.Count)
+				count = sender.UserPages.Users.Count;
+
+			if (sender.UserPages.Page * PageCount + PageCount < sender.UserPages.Users.Count)
 				menu.Add("Следующая страница", NextPage);
 			if (sender.UserPages.Page > 0)
 				menu.Add("Предыдущая страница", PrevPage);
 
-			var resMsg = $"Результат поиска (страница - {sender.UserPages.Page + 1}, записей - {PageCount}):\n\n";
+			var resMsg = $"Результат поиска (страница - {sender.UserPages.Page + 1}, записей - {count - sender.UserPages.Page * PageCount}):\n\n";
 
-			for (int i = sender.UserPages.Page * PageCount; i < sender.UserPages.Page * PageCount + PageCount; i++)
+			for (int i = sender.UserPages.Page * PageCount; i < count; i++)
 			{
 				var user = sender.UserPages.Users[i];
 
@@ -317,6 +333,8 @@ namespace TelegramBot
 			if (update.Sender is BotUser user)
 			{
 				user.State = DefaultState;
+				user.UserPages.Page = 0;
+
 				var amei = context.Ameis.Where(User => User.Usrid == args.Value).First();
 				var message = new OutputMessageText(update.Message.Text + $"\n\nВы выбрали {amei.Nachn + " " + amei.Vorna + " " + amei.Midnm}")
 				{
