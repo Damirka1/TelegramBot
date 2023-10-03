@@ -30,7 +30,7 @@ using TelegramBot.Entities;
 using TelegramBot.Extensions;
 using TelegramBot.Users;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
-
+using static TelegramBot.Entities.PassStatus;
 
 namespace TelegramBot
 {
@@ -71,6 +71,7 @@ namespace TelegramBot
 				TextInputManager = statefulInputs,
 			};
 			privateTexts.CommandsManager.AddSafely(StartCommand);
+			privateTexts.CommandsManager.AddSafely(MenuCommand);
 
 			var inputStateSection = new DefaultStateSection<SignedMessageTextUpdate>();
 
@@ -94,6 +95,8 @@ namespace TelegramBot
 			privateCallbacks.CallbackManager.AddSafely(PrevPage);
 			privateCallbacks.CallbackManager.AddSafely(SelectUser);
 			privateCallbacks.CallbackManager.AddSafely(CancelPage);
+			privateCallbacks.CallbackManager.AddSafely(SelectTime);
+			
 
 			mm.ApplyTo(privateCallbacks.CallbackManager);
 
@@ -112,6 +115,8 @@ namespace TelegramBot
 		}
 
 		private static DefaultCommand StartCommand => new("start", Do_StartAsync);
+
+		private static DefaultCommand MenuCommand => new("menu", Do_StartAsync);
 		private static async Task Do_StartAsync(SignedMessageTextUpdate update)
 		{
 			var mm = update.Owner.ResolveService<IMenuManager>();
@@ -128,8 +133,59 @@ namespace TelegramBot
 			var message = "Ваши заявки:\n\n";
 			if (update is not null && update.Sender is BotUser user)
 			{
-				message += "Ничего нет";
+				PassUser passUser = null;
+				if(context.PassUser.Where(User => User.TelegramId == user.TelegramId).Count() == 0)
+				{
+					message += "Пользователь не найден!";
+				} 
+				else
+				{
+					passUser = context.PassUser.Where(User => User.TelegramId == user.TelegramId).First();
+				}
 
+				if (passUser != null) 
+				{
+					var select = context.PassRequest.Where(PassRequest => PassRequest.From == passUser);
+
+					if(select.Count() > 0)
+					{
+						int index = 0;
+						select.Include(s => s.To)
+							.Include(s => s.PassSchedule)
+							.Include(s => s.PassStatus)
+							.ForEachAsync(value =>
+						{
+							var req = value;
+							message += $"{index + 1}) Заявка от {req.Created:G}\n" +
+							$"К кому - {req.To.Nachn + " " + req.To.Vorna + " " + req.To.Midnm}\n";
+
+							var st = req.PassStatus.Last();
+
+							message += "Текущий статус - ";
+
+							switch (st.Status)
+							{
+								case StatusEnum.Created: message += "Создано"; break;
+								case StatusEnum.InProgress: message += "В обработке"; break;
+								case StatusEnum.Declined: message += "Отклонено"; break;
+								case StatusEnum.Accepted: message += "Создано"; break;
+							};
+
+							message += "\n";
+
+							message += $"Дата посещения - {req.PassSchedule.Start:G}\n";
+							message += $"Длительность посещения - {req.PassSchedule.End.Subtract(req.PassSchedule.Start).TotalMinutes} минут\n\n";
+
+							index++;
+						});
+					}
+					else 
+					{
+						message += "Заявок нет!";
+					}
+				}
+
+				
 			}
 			return new OutputMessageText(message);
 		}
@@ -185,7 +241,8 @@ namespace TelegramBot
 
 		public static DefaultUserState DefaultState = new(0, "default");
 		public static DefaultUserState InputFullNameState = new(10, "typing");
-		public static DefaultUserState SelectState = new(11, "selecting");
+		public static DefaultUserState SelectUserState = new(11, "selecting");
+		public static DefaultUserState SelectTimeState = new(12, "selecting");
 
 		private static DefaultTextInput ExitInput => new("Выйти", Do_ExitInputCityAsync);
 		private static async Task Do_ExitInputCityAsync(SignedMessageTextUpdate update)
@@ -220,7 +277,7 @@ namespace TelegramBot
 
 				var botUser = update.Sender as BotUser;
 				botUser.UserPages.Users = users;
-				botUser.State = SelectState;
+				botUser.State = SelectUserState;
 
 				var menu = new PairedInlineMenu()
 				{
@@ -367,6 +424,124 @@ namespace TelegramBot
 					Menu = null,
 				};
 				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+
+				await Do_ShowRequestMenu(update);
+			}
+		}
+
+		private static BotArgedCallback<DateWrapper> SelectTime => new(new LabeledData("ВыборВремени", "SelectTime"), Do_SelectTimeAsync);
+		private static async Task Do_SelectTimeAsync(DateWrapper args, SignedCallbackUpdate update)
+		{
+			if (update.Sender is BotUser user)
+			{
+				var message = new OutputMessageText(update.Message.Text + $"\n\nВы выбрали {args.Value}")
+				{
+					Menu = null,
+				};
+				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+
+				try
+				{
+					await CreateRequest(user, DateTime.Parse(args.Value));
+
+					message = new OutputMessageText(update.Message.Text + $"\n\nЗаявка успешно создана!")
+					{
+						Menu = null,
+					};
+					
+				} catch(Exception ex)
+				{
+					message = new OutputMessageText(update.Message.Text + $"\n\nНе удалось создать заявку :(")
+					{
+						Menu = null,
+					};
+				}
+				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			}
+		}
+
+		private static async Task CreateRequest(BotUser botUser, DateTime time)
+		{
+			if (botUser.SelectedUser == null)
+				throw new ArgumentNullException(nameof(botUser.SelectedUser));
+
+			PassUser? passUser = null;
+
+			if (context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).Count() == 0)
+			{
+				passUser = new PassUser();
+				passUser.TelegramId = (int)botUser.TelegramId;
+
+				context.PassUser.Add(passUser);
+				context.SaveChanges();
+			} 
+			else
+			{
+				passUser = context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).First();
+			}
+
+			var now = DateTime.Now;
+
+			PassRequest passRequest = new PassRequest();
+
+			passRequest.Created = now;
+
+			passRequest.From = passUser;
+
+			passRequest.To = botUser.SelectedUser;
+
+			var passStatus = new PassStatus();
+
+			passStatus.Created = now;
+
+			passRequest.PassStatus = new List<PassStatus> { passStatus };
+
+			var passSchedule = new PassSchedule();
+			passSchedule.Day = time.Date;
+			passSchedule.Start = time;
+			passSchedule.End = time.AddHours(1);
+
+			passRequest.PassSchedule = passSchedule;
+
+			context.PassRequest.Add(passRequest);
+			context.PassStatus.Add(passStatus);
+			context.PassSchedule.Add(passSchedule);
+
+			await context.SaveChangesAsync();
+		}
+
+		//private static AnyInput InputTime => new("selectTime", Do_InputTimeAsync);
+
+		//private static async Task Do_InputTimeAsync(SignedMessageTextUpdate update)
+		//{
+
+		//}
+
+		private static async Task Do_ShowRequestMenu(SignedCallbackUpdate update)
+		{
+			if (update.Sender is BotUser user)
+			{
+				user.State = SelectTimeState;
+
+				var menu = new PairedInlineMenu()
+				{
+					Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
+				};
+
+				var date = DateTime.Now;
+
+				var now = date.AddHours(1);
+				var tommorow = now.AddDays(1);
+
+				menu.Add($"Сегодня - {now:G}", SelectTime, new DateWrapper(now.ToString("G")));
+
+				menu.Add($"Завтра - {tommorow:G}", SelectTime, new DateWrapper(tommorow.ToString("G")));
+
+				var message = new OutputMessageText("Выберите дату посещения")
+				{
+					Menu = menu,
+				};
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
 			}
 		}
 
