@@ -12,6 +12,7 @@ namespace TelegramBot.Entities
 		public PassUser From { get; set; }
 		public Amei To { get; set; }
 		public PassSchedule PassSchedule { get; set; }
-		public PassStatus PassStatus { get; set; }
+		public List<PassStatus> PassStatus { get; set; }
+		public DateTime Created { get; set; }
 	}
 }

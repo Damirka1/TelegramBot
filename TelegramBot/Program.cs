@@ -93,6 +93,7 @@ namespace TelegramBot
 			privateCallbacks.CallbackManager.AddSafely(NextPage);
 			privateCallbacks.CallbackManager.AddSafely(PrevPage);
 			privateCallbacks.CallbackManager.AddSafely(SelectUser);
+			privateCallbacks.CallbackManager.AddSafely(CancelPage);
 
 			mm.ApplyTo(privateCallbacks.CallbackManager);
 
@@ -229,6 +230,8 @@ namespace TelegramBot
 				if (botUser.UserPages.Page * PageCount + PageCount < botUser.UserPages.Users.Count)
 					menu.Add("Следующая страница", NextPage);
 
+				menu.Add("Отмена заявки", CancelPage);
+
 				int count = botUser.UserPages.Page * PageCount + PageCount;
 
 				if (botUser.UserPages.Page * PageCount + PageCount > botUser.UserPages.Users.Count)
@@ -284,6 +287,24 @@ namespace TelegramBot
 			}
 		}
 
+		private static DefaultCallback CancelPage => new("отмена", "Отмена", Do_CancelPage);
+
+		private static async Task Do_CancelPage(SignedCallbackUpdate update)
+		{
+			if (update.Sender is BotUser sender)
+			{
+				sender.State = DefaultState;
+				sender.UserPages.Page = 0;
+
+				var message = new OutputMessageText(update.Message.Text + $"\n\nВы отменили заявку")
+				{
+					Menu = null,
+				};
+
+				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			}
+		}
+
 		private static async Task Page(SignedCallbackUpdate update)
 		{
 			BotUser sender = (BotUser) update.Sender;
@@ -305,8 +326,10 @@ namespace TelegramBot
 
 			if (sender.UserPages.Page * PageCount + PageCount < sender.UserPages.Users.Count)
 				menu.Add("Следующая страница", NextPage);
-			if (sender.UserPages.Page > 0)
+			if (sender.UserPages.Page > 1)
 				menu.Add("Предыдущая страница", PrevPage);
+
+			menu.Add("Отмена заявки", CancelPage);
 
 			var resMsg = $"Результат поиска (страница - {sender.UserPages.Page + 1}, записей - {count - sender.UserPages.Page * PageCount}):\n\n";
 
@@ -336,19 +359,14 @@ namespace TelegramBot
 				user.UserPages.Page = 0;
 
 				var amei = context.Ameis.Where(User => User.Usrid == args.Value).First();
+
+				user.SelectedUser = amei;
+
 				var message = new OutputMessageText(update.Message.Text + $"\n\nВы выбрали {amei.Nachn + " " + amei.Vorna + " " + amei.Midnm}")
 				{
 					Menu = null,
 				};
 				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
-			}
-		}
-
-		private static DefaultCallback StartCreating => new("createRequest", "Создать заявку", Do_CreateAsync);
-		private static async Task Do_CreateAsync(SignedCallbackUpdate update)
-		{
-			if (update.Sender is IStatefulUser sender)
-			{
 			}
 		}
 
