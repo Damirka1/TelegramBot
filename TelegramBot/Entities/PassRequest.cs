@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace TelegramBot.Entities
 {
-	public class PassRequest
+	public class PassRequest 
 	{
 		public int Id { get; set; }
 		public PassUser From { get; set; }
