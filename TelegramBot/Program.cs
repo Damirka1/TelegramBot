@@ -9,6 +9,8 @@ using SKitLs.Bots.Telegram.AdvancedMessages.Model.Messages.Text;
 using SKitLs.Bots.Telegram.AdvancedMessages.Prototype;
 using SKitLs.Bots.Telegram.ArgedInteractions.Argumentation;
 using SKitLs.Bots.Telegram.ArgedInteractions.Interactions.Model;
+using SKitLs.Bots.Telegram.BotProcesses.Model;
+using SKitLs.Bots.Telegram.BotProcesses.Prototype;
 using SKitLs.Bots.Telegram.Core.Model.Building;
 using SKitLs.Bots.Telegram.Core.Model.Interactions;
 using SKitLs.Bots.Telegram.Core.Model.Interactions.Defaults;
@@ -17,8 +19,11 @@ using SKitLs.Bots.Telegram.Core.Model.UpdateHandlers.Defaults;
 using SKitLs.Bots.Telegram.Core.Model.UpdatesCasting;
 using SKitLs.Bots.Telegram.Core.Model.UpdatesCasting.Signed;
 using SKitLs.Bots.Telegram.Core.Prototype;
+using SKitLs.Bots.Telegram.DataBases;
+using SKitLs.Bots.Telegram.DataBases.Model.Datasets;
 using SKitLs.Bots.Telegram.PageNavs;
 using SKitLs.Bots.Telegram.PageNavs.Model;
+using SKitLs.Bots.Telegram.PageNavs.Prototype;
 using SKitLs.Bots.Telegram.Stateful.Model;
 using SKitLs.Bots.Telegram.Stateful.Prototype;
 using SKitLs.Utils.Localizations.Prototype;
@@ -91,12 +96,51 @@ namespace TelegramBot
 
 			statefulInputs.AddSectionSafely(inputReasonStateSection);
 
+			var inputUserFullnameSection = new DefaultStateSection<SignedMessageTextUpdate>();
+
+			inputUserFullnameSection.EnableState(InputUserFullNameState);
+
+			inputUserFullnameSection.AddSafely(ExitInput);
+			inputUserFullnameSection.AddSafely(InputUserFullname);
+
+			statefulInputs.AddSectionSafely(inputUserFullnameSection);
+
+			var inputUserIINSection = new DefaultStateSection<SignedMessageTextUpdate>();
+
+			inputUserIINSection.EnableState(InputIINState);
+
+			inputUserIINSection.AddSafely(ExitInput);
+			inputUserIINSection.AddSafely(InputUserIIN);
+
+			statefulInputs.AddSectionSafely(inputUserIINSection);
+
+			var inputUserTelephoneSection = new DefaultStateSection<SignedMessageTextUpdate>();
+
+			inputUserTelephoneSection.EnableState(InputTelephoneState);
+
+			inputUserTelephoneSection.AddSafely(ExitInput);
+			inputUserTelephoneSection.AddSafely(InputUserTelephone);
+
+			statefulInputs.AddSectionSafely(inputUserTelephoneSection);
+
+			var inputUserAmeiSection = new DefaultStateSection<SignedMessageTextUpdate>();
+
+			inputUserAmeiSection.EnableState(InputAmeiState);
+
+			inputUserAmeiSection.AddSafely(ExitInput);
+			inputUserAmeiSection.AddSafely(InputUserAmei);
+
+			statefulInputs.AddSectionSafely(inputUserAmeiSection);
+
 			privateMessages.TextMessageUpdateHandler = privateTexts;
 
 			var mm = GetMenuManager();
+
+			var statefulCallbacks = new DefaultStatefulManager<SignedCallbackUpdate>();
+
 			var privateCallbacks = new DefaultCallbackHandler()
 			{
-				CallbackManager = new DefaultActionManager<SignedCallbackUpdate>(),
+				CallbackManager = statefulCallbacks,
 			};
 
 			privateCallbacks.CallbackManager.AddSafely(StartSearching);
@@ -105,7 +149,8 @@ namespace TelegramBot
 			privateCallbacks.CallbackManager.AddSafely(SelectUser);
 			privateCallbacks.CallbackManager.AddSafely(CancelPage);
 			privateCallbacks.CallbackManager.AddSafely(SelectTime);
-			
+			privateCallbacks.CallbackManager.AddSafely(StartDataEntering);
+			privateCallbacks.CallbackManager.AddSafely(StartAmeiEntering);
 
 			mm.ApplyTo(privateCallbacks.CallbackManager);
 
@@ -114,13 +159,17 @@ namespace TelegramBot
 			.UseMessageHandler(privateMessages)
 			.UseCallbackHandler(privateCallbacks);
 
-			await BotBuilder.NewBuilder(token)
+			var bot = BotBuilder.NewBuilder(token)
 			   .EnablePrivates(privates)
 				.AddService<IArgsSerializeService>(new DefaultArgsSerializeService())
 				.AddService(mm)
+				.AddService<IProcessManager>(new DefaultProcessManager())
 				.CustomDelivery(new AdvancedDeliverySystem())
-				.Build()
-				.Listen();
+				.Build();
+
+			bot.Settings.BotLanguage = LangKey.RU;
+
+			await bot.Listen();
 		}
 
 		private static DefaultCommand StartCommand => new("start", Do_StartAsync);
@@ -134,7 +183,7 @@ namespace TelegramBot
 			// ...StaticPage( { это id -> } "main", "Главная"...
 			var page = mm.GetDefined("main");
 
-			await mm.PushPageAsync(page, update);
+			await mm.PushPageAsync(page, update, true);
 		}
 
 		private static IOutputMessage GetRequestList(ISignedUpdate? update)
@@ -202,20 +251,28 @@ namespace TelegramBot
 		private static IOutputMessage GetUserData(ISignedUpdate? update)
 		{
 			var message = "Ваши Данные:\n\n";
-			var menu = new PairedInlineMenu();
-			if (update is not null && update.Sender is BotUser user)
+
+			if (update is not null && update.Sender is BotUser botUser)
 			{
-				message += "Ничего нет";
-				menu.Add("Добавить данные", update.Owner.ResolveService<IMenuManager>().OpenPageCallback);
+				PassUser? user = context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).FirstOrDefault();
+				
+				if(user != null && user.IIN != null)
+				{
+					message += $"ФИО: {user.Fullname}\n\n";
+					message += $"ИИН: {user.IIN}\n\n";
+					message += $"Телефон: {user.Telephone}\n\n";
+				}
+				else
+				{
+					message += "Ничего нет";
+				}
 			}
 
-			var res = new OutputMessageText(message)
-			{
-				Menu = menu
-			};
+			var res = new OutputMessageText(message);
 
 			return res;
 		}
+
 
 		private static IMenuManager GetMenuManager()
 		{
@@ -230,25 +287,31 @@ namespace TelegramBot
 			var mainPage = new WidgetPage("main", "Главная", mainBody, mainMenu);
 
 			var listBody = new DynamicMessage(GetRequestList);
-
 			var listPage = new WidgetPage("saved", "Проверить заявки", listBody);
 
-			var createBody = new DynamicMessage(GetUserData);
+			var dataMenu = new PageNavMenu();
+			var dataBody = new DynamicMessage(GetUserData);
+			var dataPage = new WidgetPage("other", "Мои данные", dataBody, dataMenu);
 
-			var createPage = new WidgetPage("other", "Мои Данные", createBody);
+			dataMenu.AddAction(StartDataEntering);
+			dataMenu.AddAction(StartAmeiEntering);
 
 			mainMenu.PathTo(listPage);
-			mainMenu.PathTo(createPage);
+			mainMenu.PathTo(dataPage);
 			mainMenu.AddAction(StartSearching);
 
 			mm.Define(mainPage);
 			mm.Define(listPage);
-			mm.Define(createPage);
+			mm.Define(dataPage);
 
 			return mm;
 		}
 
 		public static DefaultUserState DefaultState = new(0, "default");
+		public static DefaultUserState InputUserFullNameState = new(5, "typing");
+		public static DefaultUserState InputIINState = new(6, "typing");
+		public static DefaultUserState InputTelephoneState = new(7, "typing");
+		public static DefaultUserState InputAmeiState = new(8, "typing");
 		public static DefaultUserState InputFullNameState = new(10, "typing");
 		public static DefaultUserState SelectUserState = new(11, "selecting");
 		public static DefaultUserState InputReasonState = new(12, "selecting");
@@ -266,6 +329,117 @@ namespace TelegramBot
 				{
 					Menu = new ReplyCleaner(),
 				};
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
+			}
+		}
+
+		private static DefaultCallback StartDataEntering => new("startEnterData", "Ввести данные", Do_InputUserFullNameAsync);
+		private static async Task Do_InputUserFullNameAsync(SignedCallbackUpdate update)
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+
+				PassUser? user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).FirstOrDefault();
+
+				if(user == null)
+				{
+					user = new PassUser();
+					user.TelegramId = (int) sender.TelegramId;
+
+					context.PassUser.Add(user);
+					await context.SaveChangesAsync();
+				}
+
+				sender.State = InputUserFullNameState;
+				await update.Owner.DeliveryService.ReplyToSender("1. Введите ваше ФИО или \"Выйти\"", update);
+			}
+		}
+
+		private static AnyInput InputUserFullname => new("userFullName", Do_UserFullnameInputAsync);
+
+		private static async Task Do_UserFullnameInputAsync(SignedMessageTextUpdate update)
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+				PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+
+				user.Fullname = update.Text;
+
+				context.PassUser.Update(user);
+
+				await context.SaveChangesAsync();
+
+				sender.State = InputIINState;
+
+				var message = new OutputMessageText($"2. Введите ваш ИИН или \"Выйти\"");
+
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
+			}
+		}
+
+		private static NumberInput InputUserIIN => new("userIIN", Do_UserIINInputAsync);
+
+		private static async Task Do_UserIINInputAsync(SignedMessageTextUpdate update)
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+				PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+
+				user.IIN = update.Text;
+
+				context.PassUser.Update(user);
+
+				await context.SaveChangesAsync();
+
+				sender.State = InputTelephoneState;
+
+				var message = new OutputMessageText($"3. Введите ваш Телефон или \"Выйти\"");
+
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
+			}
+		}
+
+		private static NumberInput InputUserTelephone => new("userTelephone", Do_UserTelephoneInputAsync);
+
+		private static async Task Do_UserTelephoneInputAsync(SignedMessageTextUpdate update)
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+				PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+
+				user.Telephone = update.Text;
+
+				context.PassUser.Update(user);
+
+				await context.SaveChangesAsync();
+
+				sender.State = DefaultState;
+
+				var message = new OutputMessageText($"Вы заполнили все данные");
+
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
+			}
+		}
+
+		private static DefaultCallback StartAmeiEntering => new("startEnterAmei", "Ввести AMEI (для сотрудников AMT)", Do_InputUserAmeiAsync);
+		private static async Task Do_InputUserAmeiAsync(SignedCallbackUpdate update)
+		{
+			if (update.Sender is IStatefulUser sender)
+			{
+				sender.State = InputAmeiState;
+				await update.Owner.DeliveryService.ReplyToSender("Введите ваш AMEI или \"Выйти\"", update);
+			}
+		}
+
+		private static AnyInput InputUserAmei => new("userAMEI", Do_UserAMEIInputAsync);
+		private static async Task Do_UserAMEIInputAsync(SignedMessageTextUpdate update)
+		{
+			if (update.Sender is IStatefulUser stateful)
+			{
+				stateful.State = DefaultState;
+
+				var message = new OutputMessageText($"Вы заполнили все данные");
+
 				await update.Owner.DeliveryService.ReplyToSender(message, update);
 			}
 		}
@@ -489,20 +663,7 @@ namespace TelegramBot
 			if (botUser.SelectedUser == null)
 				throw new ArgumentNullException(nameof(botUser.SelectedUser));
 
-			PassUser? passUser = null;
-
-			if (context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).Count() == 0)
-			{
-				passUser = new PassUser();
-				passUser.TelegramId = (int)botUser.TelegramId;
-
-				context.PassUser.Add(passUser);
-				context.SaveChanges();
-			} 
-			else
-			{
-				passUser = context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).First();
-			}
+			PassUser passUser = context.PassUser.Where(user => user.TelegramId == botUser.TelegramId).First();
 
 			var now = DateTime.Now;
 
@@ -533,13 +694,6 @@ namespace TelegramBot
 
 			await context.SaveChangesAsync();
 		}
-
-		//private static AnyInput InputTime => new("selectTime", Do_InputTimeAsync);
-
-		//private static async Task Do_InputTimeAsync(SignedMessageTextUpdate update)
-		//{
-
-		//}
 
 		private static async Task Do_ShowRequestMenu(ISignedUpdate update)
 		{
@@ -574,8 +728,25 @@ namespace TelegramBot
 		{
 			if (update.Sender is IStatefulUser sender)
 			{
-				sender.State = InputFullNameState;
-				await update.Owner.DeliveryService.ReplyToSender("Введите ФИО или \"Выйти\"", update);
+				PassUser? user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).FirstOrDefault();
+
+				//sender.State = InputFullNameState;
+				//await update.Owner.DeliveryService.ReplyToSender("Введите ФИО или \"Выйти\"", update);
+
+				if (user != null && user.IIN != null)
+				{
+					sender.State = InputFullNameState;
+					await update.Owner.DeliveryService.ReplyToSender("Введите ФИО или \"Выйти\"", update);
+				}
+				else
+				{
+					await update.Owner.DeliveryService.ReplyToSender("Вы не авторизированы в нашей системе, пожалуйста, введите ваши данные", update);
+
+					var mm = update.Owner.ResolveService<IMenuManager>();
+					var page = mm.GetDefined("other");
+
+					await mm.PushPageAsync(page, update);
+				}
 			}
 
 		}
