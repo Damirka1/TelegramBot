@@ -393,7 +393,7 @@ namespace TelegramBot.Services
 				await update.Owner.DeliveryService.ReplyToSender(message, update);
 			}
 		}
-
+		
 		private DefaultCallback StartAmeiEntering => new("startEnterAmei", "Ввести AMEI (для сотрудников AMT)", Do_InputUserAmeiAsync);
 		private async Task Do_InputUserAmeiAsync(SignedCallbackUpdate update)
 		{
@@ -407,13 +407,42 @@ namespace TelegramBot.Services
 		private AnyInput InputUserAmei => new("userAMEI", Do_UserAMEIInputAsync);
 		private async Task Do_UserAMEIInputAsync(SignedMessageTextUpdate update)
 		{
-			if (update.Sender is IStatefulUser stateful)
+			if (update.Sender is IStatefulUser sender)
 			{
-				stateful.State = DefaultState;
+				Amei? amei = context.Ameis.Where(u => u.Usrid == int.Parse(update.Message.Text)).FirstOrDefault();
 
-				var message = new OutputMessageText($"Вы заполнили все данные");
+				OutputMessage? message = null;
 
-				await update.Owner.DeliveryService.ReplyToSender(message, update);
+				if(amei != null)
+				{
+					PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+
+					user.Amei = amei;
+
+					user.Telephone = amei.Phone;
+					user.Fullname = amei.Nachn + " " + amei.Vorna + " " + amei.Midnm;
+					user.IIN = amei.Perid;
+
+					sender.State = DefaultState;
+
+					context.Update(user);
+					await context.SaveChangesAsync();
+
+					message = new OutputMessageText($"Вы заполнили все данные");
+
+					await update.Owner.DeliveryService.ReplyToSender(message, update);
+
+					var mm = update.Owner.ResolveService<IMenuManager>();
+
+					var page = mm.GetDefined("other");
+
+					await mm.PushPageAsync(page, update);
+				}
+				else
+				{
+					message = new OutputMessageText($"Пользователь с таким номером не найден! Попробуйте ещё раз.");
+					await update.Owner.DeliveryService.ReplyToSender(message, update);
+				}
 			}
 		}
 

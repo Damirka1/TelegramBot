@@ -1,12 +1,14 @@
 ﻿using SKitLs.Bots.Telegram.DataBases.Prototype;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace TelegramBot.Entities
 {
+	[Table("PASS_USER")]
 	public class PassUser
 	{
 		public int Id { get; set; }
