@@ -16,5 +16,6 @@ namespace TelegramBot.Entities
 		public PassSchedule PassSchedule { get; set; }
 		public List<PassStatus> PassStatus { get; set; }
 		public DateTime Created { get; set; }
+		public String Reason { get; set; }
 	}
 }

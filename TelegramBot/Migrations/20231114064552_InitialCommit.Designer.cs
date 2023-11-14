@@ -12,8 +12,8 @@ using TelegramBot;
 namespace TelegramBot.Migrations
 {
     [DbContext(typeof(OracleContext))]
-    [Migration("20231003034939_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20231114064552_InitialCommit")]
+    partial class InitialCommit
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -181,6 +181,10 @@ namespace TelegramBot.Migrations
                     b.Property<int>("PassScheduleId")
                         .HasColumnType("NUMBER(10)");
 
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("NVARCHAR2(2000)");
+
                     b.Property<int>("ToUsrid")
                         .HasColumnType("NUMBER(8)");
 
@@ -192,7 +196,7 @@ namespace TelegramBot.Migrations
 
                     b.HasIndex("ToUsrid");
 
-                    b.ToTable("PassRequest", "CHBTDEV");
+                    b.ToTable("PASS_REQUEST", "CHBTDEV");
                 });
 
             modelBuilder.Entity("TelegramBot.Entities.PassSchedule", b =>
@@ -214,7 +218,7 @@ namespace TelegramBot.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PassSchedule", "CHBTDEV");
+                    b.ToTable("PASS_SCHEDULE", "CHBTDEV");
                 });
 
             modelBuilder.Entity("TelegramBot.Entities.PassStatus", b =>
@@ -238,7 +242,7 @@ namespace TelegramBot.Migrations
 
                     b.HasIndex("PassRequestId");
 
-                    b.ToTable("PassStatus", "CHBTDEV");
+                    b.ToTable("PASS_STATUS", "CHBTDEV");
                 });
 
             modelBuilder.Entity("TelegramBot.Entities.PassUser", b =>
@@ -249,29 +253,26 @@ namespace TelegramBot.Migrations
 
                     OraclePropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AmeiUsrid")
+                    b.Property<int?>("AmeiUsrid")
                         .HasColumnType("NUMBER(8)");
 
                     b.Property<string>("Fullname")
-                        .IsRequired()
                         .HasColumnType("NVARCHAR2(2000)");
 
                     b.Property<string>("IIN")
-                        .IsRequired()
                         .HasColumnType("NVARCHAR2(2000)");
 
                     b.Property<int>("TelegramId")
                         .HasColumnType("NUMBER(10)");
 
                     b.Property<string>("Telephone")
-                        .IsRequired()
                         .HasColumnType("NVARCHAR2(2000)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AmeiUsrid");
 
-                    b.ToTable("PassUser", "CHBTDEV");
+                    b.ToTable("PASS_USER", "CHBTDEV");
                 });
 
             modelBuilder.Entity("TelegramBot.Entities.PassRequest", b =>
@@ -312,9 +313,7 @@ namespace TelegramBot.Migrations
                 {
                     b.HasOne("TelegramBot.Entities.Amei", "Amei")
                         .WithMany()
-                        .HasForeignKey("AmeiUsrid")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("AmeiUsrid");
 
                     b.Navigation("Amei");
                 });

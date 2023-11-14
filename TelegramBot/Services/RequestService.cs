@@ -16,7 +16,7 @@ namespace TelegramBot.Services
 			this.context = context;
 		}
 
-		public async Task CreateRequest(BotUser botUser, DateTime time)
+		public async Task CreateRequest(BotUser botUser)
 		{
 			if (botUser.SelectedUser == null)
 				throw new ArgumentNullException(nameof(botUser.SelectedUser));
@@ -32,6 +32,8 @@ namespace TelegramBot.Services
 			passRequest.From = passUser;
 
 			passRequest.To = botUser.SelectedUser;
+			
+			passRequest.Reason = botUser.Reason;
 
 			var passStatus = new PassStatus();
 
@@ -40,9 +42,9 @@ namespace TelegramBot.Services
 			passRequest.PassStatus = new List<PassStatus> { passStatus };
 
 			var passSchedule = new PassSchedule();
-			passSchedule.Day = time.Date;
-			passSchedule.Start = time;
-			passSchedule.End = time.AddHours(1);
+			passSchedule.Day = botUser.ScheduleStart.Date;
+			passSchedule.Start = botUser.ScheduleStart;
+			passSchedule.End = botUser.ScheduleEnd;
 
 			passRequest.PassSchedule = passSchedule;
 

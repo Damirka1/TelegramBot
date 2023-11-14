@@ -48,6 +48,8 @@ namespace TelegramBot
 
 		private static RequestService requestService;
 
+		private static CalendarService calendarService;
+
         public static async Task Main(string[] args)
         {
             // Set up configuration
@@ -60,7 +62,10 @@ namespace TelegramBot
 
 			context.Database.EnsureCreated();
 			requestService = new RequestService(context);
-			botService = new BotService(context, requestService);
+
+			calendarService = new CalendarService();
+
+			botService = new BotService(context, requestService, calendarService);
 
 			Console.WriteLine("Start Listening");
 

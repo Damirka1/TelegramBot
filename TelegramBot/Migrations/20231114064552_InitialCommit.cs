@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace TelegramBot.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitialCommit : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -15,7 +15,7 @@ namespace TelegramBot.Migrations
                 name: "CHBTDEV");
 
             migrationBuilder.CreateTable(
-                name: "PassSchedule",
+                name: "PASS_SCHEDULE",
                 schema: "CHBTDEV",
                 columns: table => new
                 {
@@ -27,36 +27,35 @@ namespace TelegramBot.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PassSchedule", x => x.Id);
+                    table.PrimaryKey("PK_PASS_SCHEDULE", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
-                name: "PassUser",
+                name: "PASS_USER",
                 schema: "CHBTDEV",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "NUMBER(10)", nullable: false)
                         .Annotation("Oracle:Identity", "START WITH 1 INCREMENT BY 1"),
-                    Fullname = table.Column<string>(type: "NVARCHAR2(2000)", nullable: false),
-                    IIN = table.Column<string>(type: "NVARCHAR2(2000)", nullable: false),
-                    Telephone = table.Column<string>(type: "NVARCHAR2(2000)", nullable: false),
+                    Fullname = table.Column<string>(type: "NVARCHAR2(2000)", nullable: true),
+                    IIN = table.Column<string>(type: "NVARCHAR2(2000)", nullable: true),
+                    Telephone = table.Column<string>(type: "NVARCHAR2(2000)", nullable: true),
                     TelegramId = table.Column<int>(type: "NUMBER(10)", nullable: false),
-                    AmeiUsrid = table.Column<int>(type: "NUMBER(8)", nullable: false)
+                    AmeiUsrid = table.Column<int>(type: "NUMBER(8)", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PassUser", x => x.Id);
+                    table.PrimaryKey("PK_PASS_USER", x => x.Id);
                     table.ForeignKey(
                         name: "FK_AmeiUsrid",
                         column: x => x.AmeiUsrid,
                         principalSchema: "CHBTDEV",
                         principalTable: "AMEI",
-                        principalColumn: "USRID",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "USRID");
                 });
 
             migrationBuilder.CreateTable(
-                name: "PassRequest",
+                name: "PASS_REQUEST",
                 schema: "CHBTDEV",
                 columns: table => new
                 {
@@ -65,13 +64,14 @@ namespace TelegramBot.Migrations
                     FromId = table.Column<int>(type: "NUMBER(10)", nullable: false),
                     ToUsrid = table.Column<int>(type: "NUMBER(8)", nullable: false),
                     PassScheduleId = table.Column<int>(type: "NUMBER(10)", nullable: false),
-                    Created = table.Column<DateTime>(type: "TIMESTAMP(7)", nullable: false)
+                    Created = table.Column<DateTime>(type: "TIMESTAMP(7)", nullable: false),
+                    Reason = table.Column<string>(type: "NVARCHAR2(2000)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PassRequest", x => x.Id);
+                    table.PrimaryKey("PK_PASS_REQUEST", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ToUsrid",
+                        name: "FK_AMEI_ToUsrid",
                         column: x => x.ToUsrid,
                         principalSchema: "CHBTDEV",
                         principalTable: "AMEI",
@@ -81,20 +81,20 @@ namespace TelegramBot.Migrations
                         name: "FK_PassScheduleId",
                         column: x => x.PassScheduleId,
                         principalSchema: "CHBTDEV",
-                        principalTable: "PassSchedule",
+                        principalTable: "PASS_SCHEDULE",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_FromId",
                         column: x => x.FromId,
                         principalSchema: "CHBTDEV",
-                        principalTable: "PassUser",
+                        principalTable: "PASS_USER",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "PassStatus",
+                name: "PASS_STATUS",
                 schema: "CHBTDEV",
                 columns: table => new
                 {
@@ -106,43 +106,43 @@ namespace TelegramBot.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_PassStatus", x => x.Id);
+                    table.PrimaryKey("PK_PASS_STATUS", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_PassRequest_PassRequestId",
+                        name: "FK_PassRequestId",
                         column: x => x.PassRequestId,
                         principalSchema: "CHBTDEV",
-                        principalTable: "PassRequest",
+                        principalTable: "PASS_REQUEST",
                         principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_FromId",
+                name: "IX_PASS_REQUEST_FromId",
                 schema: "CHBTDEV",
-                table: "PassRequest",
+                table: "PASS_REQUEST",
                 column: "FromId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PassScheduleId",
+                name: "IX_PASS_REQUEST_PassScheduleId",
                 schema: "CHBTDEV",
-                table: "PassRequest",
+                table: "PASS_REQUEST",
                 column: "PassScheduleId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ToUsrid",
+                name: "IX_PASS_REQUEST_ToUsrid",
                 schema: "CHBTDEV",
-                table: "PassRequest",
+                table: "PASS_REQUEST",
                 column: "ToUsrid");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PassRequestId",
+                name: "IX_PASS_STATUS_PassRequestId",
                 schema: "CHBTDEV",
-                table: "PassStatus",
+                table: "PASS_STATUS",
                 column: "PassRequestId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AmeiUsrid",
+                name: "IX_PASS_USER_AmeiUsrid",
                 schema: "CHBTDEV",
-                table: "PassUser",
+                table: "PASS_USER",
                 column: "AmeiUsrid");
         }
 
@@ -150,19 +150,19 @@ namespace TelegramBot.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "PassStatus",
+                name: "PASS_STATUS",
                 schema: "CHBTDEV");
 
             migrationBuilder.DropTable(
-                name: "PassRequest",
+                name: "PASS_REQUEST",
                 schema: "CHBTDEV");
 
             migrationBuilder.DropTable(
-                name: "PassSchedule",
+                name: "PASS_SCHEDULE",
                 schema: "CHBTDEV");
 
             migrationBuilder.DropTable(
-                name: "PassUser",
+                name: "PASS_USER",
                 schema: "CHBTDEV");
         }
     }

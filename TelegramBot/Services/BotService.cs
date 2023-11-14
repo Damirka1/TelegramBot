@@ -15,10 +15,14 @@ using SKitLs.Bots.Telegram.PageNavs;
 using SKitLs.Bots.Telegram.PageNavs.Model;
 using SKitLs.Bots.Telegram.Stateful.Model;
 using SKitLs.Bots.Telegram.Stateful.Prototype;
+using System.Globalization;
+using Telegram.Bot;
 using TelegramBot.Dtos;
 using TelegramBot.Entities;
 using TelegramBot.Extensions;
+using TelegramBot.Services.Calendar;
 using TelegramBot.Users;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using static TelegramBot.Entities.PassStatus;
 
 namespace TelegramBot.Services
@@ -37,11 +41,14 @@ namespace TelegramBot.Services
 
 		private OracleContext context;
 		private RequestService requestService;
+		private CalendarService calendarService;
 
-		public BotService(OracleContext context, RequestService requestService) 
+		public BotService(OracleContext context, RequestService requestService, CalendarService calendarService) 
 		{
 			this.context = context;
 			this.requestService = requestService;
+			this.calendarService = calendarService;
+			calendarService.SetFinishFunc(Do_CreateRequest);
 		}
 
 		public void SetUpStates(DefaultStatefulManager<SignedMessageTextUpdate> statefulInputs)
@@ -108,9 +115,9 @@ namespace TelegramBot.Services
 			callbackManager.AddSafely(PrevPage);
 			callbackManager.AddSafely(SelectUser);
 			callbackManager.AddSafely(CancelPage);
-			callbackManager.AddSafely(SelectTime);
 			callbackManager.AddSafely(StartDataEntering);
 			callbackManager.AddSafely(StartAmeiEntering);
+			callbackManager.AddSafely(calendarService.CalendarCallBack);
 		}
 
 		private async Task Do_ShowRequestMenu(ISignedUpdate update)
@@ -119,25 +126,7 @@ namespace TelegramBot.Services
 			{
 				user.State = SelectTimeState;
 
-				var menu = new PairedInlineMenu()
-				{
-					Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
-				};
-
-				var date = DateTime.Now;
-
-				var now = date.AddHours(1);
-				var tommorow = now.AddDays(1);
-
-				menu.Add($"Сегодня - {now:G}", SelectTime, new DateWrapper(now.ToString("G")));
-
-				menu.Add($"Завтра - {tommorow:G}", SelectTime, new DateWrapper(tommorow.ToString("G")));
-
-				var message = new OutputMessageText("Выберите дату посещения")
-				{
-					Menu = menu,
-				};
-				await update.Owner.DeliveryService.ReplyToSender(message, update);
+				calendarService.ShowCalendar(update);
 			}
 		}
 
@@ -179,9 +168,9 @@ namespace TelegramBot.Services
 								switch (st.Status)
 								{
 									case StatusEnum.Created: message += "Создано"; break;
-									case StatusEnum.InProgress: message += "В обработке"; break;
+									case StatusEnum.Accepted: message += "Принято"; break;
 									case StatusEnum.Declined: message += "Отклонено"; break;
-									case StatusEnum.Accepted: message += "Создано"; break;
+									case StatusEnum.Closed: message += "Завершено"; break;
 								};
 
 								message += "\n";
@@ -268,9 +257,6 @@ namespace TelegramBot.Services
 			if (update.Sender is IStatefulUser sender)
 			{
 				PassUser? user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).FirstOrDefault();
-
-				//sender.State = InputFullNameState;
-				//await update.Owner.DeliveryService.ReplyToSender("Введите ФИО или \"Выйти\"", update);
 
 				if (user != null && user.IIN != null)
 				{
@@ -391,6 +377,14 @@ namespace TelegramBot.Services
 				var message = new OutputMessageText($"Вы заполнили все данные");
 
 				await update.Owner.DeliveryService.ReplyToSender(message, update);
+
+				await update.Owner.DeliveryService.ReplyToSender(message, update);
+
+				var mm = update.Owner.ResolveService<IMenuManager>();
+
+				var page = mm.GetDefined("other");
+
+				await mm.PushPageAsync(page, update);
 			}
 		}
 		
@@ -508,13 +502,14 @@ namespace TelegramBot.Services
 		private AnyInput InputReason => new("reason", Do_InputReasonAsync);
 		private async Task Do_InputReasonAsync(SignedMessageTextUpdate update)
 		{
-			string fullName = update.Text;
-			var message = new OutputMessageText("Вы ввели: " + fullName);
+			string reason = update.Text;
+			var message = new OutputMessageText("Вы ввели: " + reason);
 
 			await update.Owner.DeliveryService.ReplyToSender(message, update);
 
 			var botUser = update.Sender as BotUser;
 			botUser.State = SelectUserState;
+			botUser.Reason = reason;
 
 			await Do_ShowRequestMenu(update);
 		}
@@ -628,35 +623,29 @@ namespace TelegramBot.Services
 				await update.Owner.DeliveryService.ReplyToSender("Введите причину посещения или \"Выйти\"", update);
 			}
 		}
-
-		private BotArgedCallback<DateWrapper> SelectTime => new(new LabeledData("ВыборВремени", "SelectTime"), Do_SelectTimeAsync);
-		private async Task Do_SelectTimeAsync(DateWrapper args, SignedCallbackUpdate update)
+		private async Task Do_CreateRequest(SignedCallbackUpdate update)
 		{
 			if (update.Sender is BotUser user)
 			{
-				var message = new OutputMessageText(update.Message.Text + $"\n\nВы выбрали {args.Value}")
-				{
-					Menu = null,
-				};
-				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+				var msg = "";
 
 				try
 				{
-					await requestService.CreateRequest(user, DateTime.Parse(args.Value));
+					await requestService.CreateRequest(user);
 
-					message = new OutputMessageText(message.Text + $"\n\nЗаявка успешно создана!")
-					{
-						Menu = null,
-					};
+					msg = update.Message.Text + $"\n\nЗаявка успешно создана!";
 
 				}
 				catch (Exception ex)
 				{
-					message = new OutputMessageText(message.Text + $"\n\nНе удалось создать заявку :(")
-					{
-						Menu = null,
-					};
+					msg = update.Message.Text + $"\n\nНе удалось создать заявку :(";
 				}
+
+				var message = new OutputMessageText(msg)
+				{
+					Menu = null
+				};
+
 				await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
 			}
 		}

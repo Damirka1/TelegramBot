@@ -13,9 +13,9 @@ namespace TelegramBot.Entities
 		public enum StatusEnum
 		{
 			Created,
-			InProgress,
+			Accepted,
 			Declined,
-			Accepted
+			Closed
 		}
 
 		public int Id { get; set; }

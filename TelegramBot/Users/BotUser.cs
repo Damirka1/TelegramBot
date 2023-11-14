@@ -13,6 +13,12 @@ namespace TelegramBot.Users
 
 		public Amei? SelectedUser { get; set; }
 
+        public DateTime ScheduleStart { get; set; }
+
+		public DateTime ScheduleEnd { get; set; }
+
+        public String Reason { get; set; }
+
 		public BotUser(long telegramId)
         {
             State = new DefaultUserState();
