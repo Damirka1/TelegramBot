@@ -19,6 +19,8 @@ using TelegramBot.Users;
 using Telegram.Bot.Types.ReplyMarkups;
 using Microsoft.VisualBasic;
 using Constants = TelegramBot.Services.Calendar.Constants;
+using SKitLs.Bots.Telegram.AdvancedMessages.Model.Menus.Inline;
+using SKitLs.Bots.Telegram.Core.Model.DeliverySystem.Prototype;
 
 namespace TelegramBot.Services
 {
@@ -69,12 +71,12 @@ namespace TelegramBot.Services
 			this.Do_CreateRequest = Do_CreateRequest;
 		}
 
-		private void AddYear(PairedInlineMenu menu, DateTime date)
+		private void AddYear(InlineMenu menu, DateTime date)
 		{
 			menu.Add($"» {date.ToString("Y", Dtfi)} «", CalendarCallBack, new StringWrapper($"{Constants.YearMonthPicker}{date.ToString(Constants.DateFormat)}"), true);
 		}
 
-		private void AddDayOfWeek(PairedInlineMenu menu)
+		private void AddDayOfWeek(InlineMenu menu)
 		{
 			var firstDayOfWeek = (int)Dtfi.FirstDayOfWeek;
 
@@ -86,7 +88,7 @@ namespace TelegramBot.Services
 			}
 		}
 
-		private void AddMonth(PairedInlineMenu menu, DateTime date)
+		private void AddMonth(InlineMenu menu, DateTime date)
 		{
 			var firstDayOfMonth = new DateTime(date.Year, date.Month, 1);
 			var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1).Day;
@@ -119,7 +121,7 @@ namespace TelegramBot.Services
 			}
 		}
 
-		private void AddControls(PairedInlineMenu menu, DateTime date)
+		private void AddControls(InlineMenu menu, DateTime date)
 		{
 			menu.Add("<", CalendarCallBack, new StringWrapper($"{Constants.ChangeTo}{date.AddMonths(-1).ToString(Constants.DateFormat)}"), false);
 			menu.Add(" ", CalendarCallBack, new StringWrapper(""), false);
@@ -128,7 +130,7 @@ namespace TelegramBot.Services
 
 		public async Task ShowCalendar(ISignedUpdate update)
 		{
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
@@ -148,12 +150,12 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(message, update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(await message.BuildContentAsync(update), update);
 		}
 
 		private async Task ShowCalendarByDate(SignedCallbackUpdate update, DateTime date)
 		{
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
@@ -171,12 +173,12 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 		}
 
 		private async Task ShowMonthCalendar(SignedCallbackUpdate update, DateTime date)
 		{
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
@@ -199,12 +201,12 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 		}
 
 		private async Task SelectTime(SignedCallbackUpdate update, DateTime date)
 		{
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
@@ -235,7 +237,7 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 		}
 
 		private async Task SelectDuration(SignedCallbackUpdate update, DateTime date)
@@ -244,7 +246,7 @@ namespace TelegramBot.Services
 
 			botUser.ScheduleStart = date;
 
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
@@ -272,7 +274,7 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 		}
 
 		private async Task Finish(SignedCallbackUpdate update, DateTime date)
@@ -281,7 +283,7 @@ namespace TelegramBot.Services
 
 			botUser.ScheduleEnd = date;
 
-			var menu = new PairedInlineMenu()
+			var menu = new InlineMenu()
 			{
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 				ColumnsCount = 4
@@ -322,7 +324,7 @@ namespace TelegramBot.Services
 				Menu = menu,
 			};
 
-			await update.Owner.DeliveryService.ReplyToSender(new EditWrapper(message, update.TriggerMessageId), update);
+			await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 		}
 	}
 }

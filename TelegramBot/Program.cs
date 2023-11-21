@@ -80,7 +80,7 @@ namespace TelegramBot
 
 			var privateMessages = new DefaultSignedMessageUpdateHandler();
 
-			var statefulInputs = new DefaultStatefulManager<SignedMessageTextUpdate>();
+			var statefulInputs = new StatefulActionManager<SignedMessageTextUpdate>();
 
 			var privateTexts = new DefaultSignedMessageTextUpdateHandler
 			{
@@ -96,7 +96,7 @@ namespace TelegramBot
 
 			var mm = botService.GetMenuManager();
 
-			var statefulCallbacks = new DefaultStatefulManager<SignedCallbackUpdate>();
+			var statefulCallbacks = new StatefulActionManager<SignedCallbackUpdate>();
 
 			var privateCallbacks = new DefaultCallbackHandler()
 			{
@@ -113,11 +113,11 @@ namespace TelegramBot
 			.UseCallbackHandler(privateCallbacks);
 
 			var bot = BotBuilder.NewBuilder(token)
-			   .EnablePrivates(privates)
+				.CustomDelivery(new AdvancedDeliverySystem())
+				.EnablePrivates(privates)
 				.AddService<IArgsSerializeService>(new DefaultArgsSerializeService())
 				.AddService(mm)
 				.AddService<IProcessManager>(new DefaultProcessManager())
-				.CustomDelivery(new AdvancedDeliverySystem())
 				.Build();
 
 			bot.Settings.BotLanguage = LangKey.RU;
@@ -134,6 +134,11 @@ namespace TelegramBot
 
 			// Получаем определённую страницу по id
 			// ...StaticPage( { это id -> } "main", "Главная"...
+
+			var user = update.Sender as BotUser;
+
+			user.UserPages.Page = 0;
+
 			var page = mm.GetDefined("main");
 
 			await mm.PushPageAsync(page, update, true);
