@@ -175,6 +175,9 @@ namespace TelegramBot.Migrations
                     b.Property<int>("FromId")
                         .HasColumnType("NUMBER(10)");
 
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("NUMBER(1)");
+
                     b.Property<int>("PassScheduleId")
                         .HasColumnType("NUMBER(10)");
 

@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json.Linq;
 using SKitLs.Bots.Telegram.AdvancedMessages.AdvancedDelivery;
@@ -28,8 +29,10 @@ using SKitLs.Bots.Telegram.Stateful.Model;
 using SKitLs.Bots.Telegram.Stateful.Prototype;
 using SKitLs.Utils.Localizations.Prototype;
 using System.Reflection;
+using Telegram.Bot;
 using Telegram.Bot.Requests;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Dtos;
 using TelegramBot.Entities;
 using TelegramBot.Extensions;
@@ -89,10 +92,16 @@ namespace TelegramBot
 			};
 			privateTexts.CommandsManager.AddSafely(StartCommand);
 			privateTexts.CommandsManager.AddSafely(MenuCommand);
+			privateTexts.CommandsManager.AddSafely(PhoneCommand);
 
 			botService.SetUpStates(statefulInputs);
 
+			var other = new DefaultSignedMessageUpdateHandler {
+				RestMessagesUpdateHandler = new RestMessageHandler(botService)
+			};
+
 			privateMessages.TextMessageUpdateHandler = privateTexts;
+			privateMessages.RestMessagesUpdateHandler = other;
 
 			var mm = botService.GetMenuManager();
 
@@ -142,6 +151,19 @@ namespace TelegramBot
 			var page = mm.GetDefined("main");
 
 			await mm.PushPageAsync(page, update, true);
+		}
+
+		private static DefaultCommand PhoneCommand => new("phone", Do_GetPhoneAsync);
+		private static async Task Do_GetPhoneAsync(SignedMessageTextUpdate update)
+		{
+
+			ReplyKeyboardMarkup requestReplyKeyboard = new(
+			new[]
+			{
+				KeyboardButton.WithRequestContact("Отправить номер телефона")
+			});
+
+			await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Отправьте ваш телефон для авторизации", replyMarkup: requestReplyKeyboard);
 		}
 
 	}

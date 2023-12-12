@@ -20,6 +20,9 @@ using SKitLs.Bots.Telegram.PageNavs.Prototype;
 using SKitLs.Bots.Telegram.Stateful.Model;
 using SKitLs.Bots.Telegram.Stateful.Prototype;
 using System.Reflection;
+using Telegram.Bot;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Dtos;
 using TelegramBot.Entities;
 using TelegramBot.Extensions;
@@ -99,7 +102,6 @@ namespace TelegramBot.Services
 			inputUserTelephoneSection.EnableState(InputTelephoneState);
 
 			inputUserTelephoneSection.AddSafely(ExitInput);
-			inputUserTelephoneSection.AddSafely(InputUserTelephone);
 
 			statefulInputs.AddSectionSafely(inputUserTelephoneSection);
 
@@ -282,8 +284,8 @@ namespace TelegramBot.Services
 				Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
 			};
 
-			menu.Add(StartDataEntering);
-			menu.Add(StartAmeiEntering);
+			//menu.Add(StartDataEntering);
+			//menu.Add(StartAmeiEntering);
 
 			var res = new OutputMessageText(message)
 			{
@@ -388,7 +390,9 @@ namespace TelegramBot.Services
 				{
 					await update.Owner.DeliveryService.AnswerSenderAsync("Вы не авторизированы в нашей системе, пожалуйста, введите ваши данные", update);
 
-					await GetUserData(update);
+					await AuthRequest(update);
+
+					//await GetUserData(update);
 
 					//var mm = update.Owner.ResolveService<IMenuManager>();
 					//var page = mm.GetDefined("other");
@@ -399,8 +403,19 @@ namespace TelegramBot.Services
 
 		}
 
-		private DefaultTextInput ExitInput => new("Выйти", Do_ExitInputCityAsync);
-		private async Task Do_ExitInputCityAsync(SignedMessageTextUpdate update)
+		private async Task AuthRequest(SignedCallbackUpdate update)
+		{
+			ReplyKeyboardMarkup requestReplyKeyboard = new(
+			new[]
+			{
+				KeyboardButton.WithRequestContact("Отправить номер телефона")
+			});
+
+			await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Отправьте ваш телефон для авторизации", replyMarkup: requestReplyKeyboard);
+		}
+
+		private DefaultTextInput ExitInput => new("Выйти", Do_ExitInputAsync);
+		private async Task Do_ExitInputAsync(SignedMessageTextUpdate update)
 		{
 			// Просто меняем состояние пользователя на исходное
 			if (update.Sender is IStatefulUser stateful)
@@ -473,54 +488,11 @@ namespace TelegramBot.Services
 
 				await context.SaveChangesAsync();
 
-				sender.State = InputTelephoneState;
-
-				//var menu = new ReplyMenu();
-
-				//menu.Add(new RelpyButton())
-
-				var message = new OutputMessageText($"3. Введите ваш Телефон или \"Выйти\"");
-
-				await update.Owner.DeliveryService.AnswerSenderAsync(await message.BuildContentAsync(update), update);
-
-				//ReplyKeyboardMarkup requestReplyKeyboard = new(
-				//new[]
-				//{
-				//	KeyboardButton.WithRequestContact("Отправить номер телефона")
-				//});
-
-				//await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: message.Text, replyMarkup: requestReplyKeyboard);
-			}
-		}
-
-		private AnyInput InputUserTelephone => new("UserTelephone", Do_UserTelephoneInputAsync);
-
-		private async Task Do_UserTelephoneInputAsync(SignedMessageTextUpdate update)
-		{
-			if (update.Sender is IStatefulUser sender)
-			{
-				PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
-
-				//Contact contact = update.Message.Contact;
-
-				//if (contact != null)
-				//	user.Telephone = contact.PhoneNumber;
-				//else
-				//	user.Telephone = update.Message.Text;
-
-				user.Telephone = update.Message.Text;
-
-				context.PassUser.Update(user);
-
-				await context.SaveChangesAsync();
-
 				sender.State = DefaultState;
 
 				var message = new OutputMessageText($"Вы заполнили все данные");
 
 				await update.Owner.DeliveryService.AnswerSenderAsync(await message.BuildContentAsync(update), update);
-
-				// TODO: make open data page
 			}
 		}
 		
@@ -545,7 +517,22 @@ namespace TelegramBot.Services
 
 				if(amei != null)
 				{
-					PassUser user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+					PassUser? user = null;
+
+					if(context.PassUser.Where(user => user.TelegramId == sender.TelegramId).Count() == 0)
+					{
+						user = new PassUser()
+						{
+							TelegramId = (int)sender.TelegramId
+						};
+
+						context.PassUser.Add(user);
+						await context.SaveChangesAsync();
+					}
+					else
+					{
+						user = context.PassUser.Where(user => user.TelegramId == sender.TelegramId).First();
+					}
 
 					user.Amei = amei;
 
@@ -562,13 +549,6 @@ namespace TelegramBot.Services
 
 					await update.Owner.DeliveryService.AnswerSenderAsync(await message.BuildContentAsync(update), update);
 
-					// TODO: make page opening
-
-					//var mm = update.Owner.ResolveService<IMenuManager>();
-
-					//var page = mm.GetDefined("other");
-
-					//await mm.PushPageAsync(page, update);
 				}
 				else
 				{
@@ -774,7 +754,7 @@ namespace TelegramBot.Services
 				}
 				catch (Exception ex)
 				{
-					msg = update.Message.Text + $"\n\nНе удалось создать заявку :(";
+					msg = update.Message.Text + $"\n\nНе удалось создать заявку :(\n\n{ex.Message}";
 				}
 
 				var message = new OutputMessageText(msg)
@@ -786,6 +766,69 @@ namespace TelegramBot.Services
 
 				await update.Owner.DeliveryService.AnswerSenderAsync(new EditWrapper(await message.BuildContentAsync(update), update.TriggerMessageId), update);
 			}
+		}
+
+		public async Task AuthorizeUser(Contact contact, BotUser botUser, SignedMessageUpdate update)
+		{
+			var ameiList = context.Ameis.Where(amei => amei.Phone == contact.PhoneNumber);
+
+			PassUser user = new PassUser()
+			{
+				TelegramId = (int)botUser.TelegramId
+			};
+
+			context.PassUser.Add(user);
+			await context.SaveChangesAsync();
+
+			if (ameiList.Count() > 0)
+			{
+				Amei amei = ameiList.First();
+
+				user.Amei = amei;
+
+				user.Telephone = amei.Phone;
+				user.Fullname = amei.Nachn + " " + amei.Vorna + " " + amei.Midnm;
+				user.IIN = amei.Perid;
+
+				botUser.State = DefaultState;
+
+				context.Update(user);
+				await context.SaveChangesAsync();
+
+				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы успешно авторизированы как сотрудник AMT", replyMarkup: new ReplyKeyboardRemove());
+				var message = "Ваши данные:\n\n";
+
+				message += $"ФИО: {user.Fullname}\n\n";
+				message += $"ИИН: {user.IIN}\n\n";
+				message += $"Телефон: {user.Telephone}\n\n";
+
+				var menu = new InlineMenu()
+				{
+					Serializer = update.Owner.ResolveService<IArgsSerializeService>(),
+				};
+
+				menu.Add(StartSearching);
+
+				var res = new OutputMessageText(message)
+				{
+					Menu = menu
+				};
+
+				await update.Owner.DeliveryService.AnswerSenderAsync(await res.BuildContentAsync(update), update);
+			}
+			else
+			{
+				user.Telephone = contact.PhoneNumber;
+
+				context.Update(user);
+				await context.SaveChangesAsync();
+				
+				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы не являетесь сотрудником АМТ, вам необходимо ввести дополнительные данные", replyMarkup: new ReplyKeyboardRemove());
+
+				botUser.State = InputUserFullNameState;
+				await update.Owner.DeliveryService.AnswerSenderAsync("1. Введите ваше ФИО или \"Выйти\"", update);
+			}
+
 		}
 	}
 }
