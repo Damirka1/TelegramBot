@@ -795,7 +795,7 @@ namespace TelegramBot.Services
 				context.Update(user);
 				await context.SaveChangesAsync();
 
-				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы успешно авторизированы как сотрудник AMT", replyMarkup: new ReplyKeyboardRemove());
+				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы успешно авторизированы как сотрудник QARMET", replyMarkup: new ReplyKeyboardRemove());
 				var message = "Ваши данные:\n\n";
 
 				message += $"ФИО: {user.Fullname}\n\n";
@@ -823,7 +823,7 @@ namespace TelegramBot.Services
 				context.Update(user);
 				await context.SaveChangesAsync();
 				
-				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы не являетесь сотрудником АМТ, вам необходимо ввести дополнительные данные", replyMarkup: new ReplyKeyboardRemove());
+				await update.Owner.Bot.SendTextMessageAsync(chatId: update.ChatId, text: "Вы не являетесь сотрудником QARMET, вам необходимо ввести дополнительные данные", replyMarkup: new ReplyKeyboardRemove());
 
 				botUser.State = InputUserFullNameState;
 				await update.Owner.DeliveryService.AnswerSenderAsync("1. Введите ваше ФИО или \"Выйти\"", update);
